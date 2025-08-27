@@ -1,5 +1,5 @@
 <<<<<<< HEAD
-# CPU Scheduling Simulator (Tkinter)
+# CPU Scheduling Simulator 
 
 ## Overview
 This is a **CPU Scheduling Simulator** built with Python and Tkinter.  
@@ -57,9 +57,7 @@ This is a **CPU Scheduling Simulator** built with Python and Tkinter.
 It allows users to input processes manually or load them from CSV/JSON files, simulate CPU scheduling, and visualize the results.
 
 Currently implemented:
-- **FCFS (First Come First Serve)**
-
-Planned future algorithms:
+-FCFS (First Come, First Serve)
 - SJF (Shortest Job First)
 - SRT (Shortest Remaining Time)
 - RR (Round Robin)
@@ -92,8 +90,8 @@ Planned future algorithms:
 If Using Git:
 1. Clone the repository:
 ```bash
-git clone https://github.com/Vattey26/CPU-Scheduling-Simulator.git
-cd cpu-scheduling-simulator
+git https://github.com/Vattey26/Project-CPU-Scheduling-Simulator.git
+cd Project-CPU-Scheduling-Simulator
 
 Installation:
 1. Clone or download the project ZIP.
