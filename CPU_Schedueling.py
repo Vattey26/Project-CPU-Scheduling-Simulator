@@ -46,11 +46,34 @@ class CPUSchedulerGUI:
         options_frame.pack(fill="x", padx=10, pady=5)
         tk.Label(options_frame, text="Algorithm:").grid(row=0, column=0)
         self.algo_var = tk.StringVar(value=self.algorithms[0])
-        ttk.Combobox(options_frame, textvariable=self.algo_var, values=self.algorithms, state="readonly").grid(row=0, column=1)
-        tk.Label(options_frame, text="Quantum (RR/MLFQ):").grid(row=0, column=2)
+        self.algo_menu = ttk.Combobox(options_frame, textvariable=self.algo_var, values=self.algorithms, state="readonly")
+        self.algo_menu.grid(row=0, column=1)
+        self.algo_menu.bind("<<ComboboxSelected>>", self.check_algorithm)
+
+        # Quantum for RR or MLFQ
+        self.quantum_label = tk.Label(options_frame, text="Quantum (RR):")
+        self.quantum_label.grid(row=0, column=2)
         self.quantum_entry = tk.Entry(options_frame, width=5)
         self.quantum_entry.insert(0, "2")
         self.quantum_entry.grid(row=0, column=3)
+
+        # MLFQ separate entries
+        self.mlfq_frame = tk.Frame(options_frame)
+        tk.Label(self.mlfq_frame, text="Level 1").grid(row=0, column=0)
+        tk.Label(self.mlfq_frame, text="Level 2").grid(row=0, column=1)
+        tk.Label(self.mlfq_frame, text="Level 3").grid(row=0, column=2)
+        self.mlfq_q1 = tk.Entry(self.mlfq_frame, width=5)
+        self.mlfq_q2 = tk.Entry(self.mlfq_frame, width=5)
+        self.mlfq_q3 = tk.Entry(self.mlfq_frame, width=5)
+        self.mlfq_q1.insert(0,"2")
+        self.mlfq_q2.insert(0,"4")
+        self.mlfq_q3.insert(0,"8")
+        self.mlfq_q1.grid(row=1,column=0)
+        self.mlfq_q2.grid(row=1,column=1)
+        self.mlfq_q3.grid(row=1,column=2)
+        self.mlfq_frame.grid(row=0,column=2,columnspan=2)
+        self.mlfq_frame.grid_remove()  # hide initially
+
         tk.Button(options_frame, text="Run", command=self.run_scheduler).grid(row=0, column=4, padx=5)
         tk.Button(options_frame, text="Save Results", command=self.save_results).grid(row=0, column=5, padx=5)
 
@@ -82,69 +105,87 @@ class CPUSchedulerGUI:
 
     def load_file(self):
         file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv"), ("JSON files", "*.json")])
-        if not file_path:
-            return
+        if not file_path: return
         try:
             if file_path.endswith(".csv"):
                 with open(file_path, newline="") as f:
                     reader = csv.DictReader(f)
                     for row in reader:
-                        p = Process(row["PID"], row["Arrival"], row["Burst"], row.get("Priority", 0))
+                        p = Process(row["PID"], row["Arrival"], row["Burst"], row.get("Priority",0))
                         self.processes.append(p)
-                        self.process_listbox.insert(tk.END, f"{p.pid} - Arrival: {p.arrival}, Burst: {p.burst}")
-            elif file_path.endswith(".json"):
+                        self.process_listbox.insert(tk.END,f"{p.pid} - Arrival: {p.arrival}, Burst: {p.burst}")
+            else:
                 with open(file_path) as f:
                     data = json.load(f)
                     for row in data:
-                        p = Process(row["PID"], row["Arrival"], row["Burst"], row.get("Priority", 0))
+                        p = Process(row["PID"], row["Arrival"], row["Burst"], row.get("Priority",0))
                         self.processes.append(p)
-                        self.process_listbox.insert(tk.END, f"{p.pid} - Arrival: {p.arrival}, Burst: {p.burst}")
+                        self.process_listbox.insert(tk.END,f"{p.pid} - Arrival: {p.arrival}, Burst: {p.burst}")
         except Exception as e:
             messagebox.showerror("File Error", str(e))
 
     def save_results(self):
         file_path = filedialog.asksaveasfilename(defaultextension=".csv",
-                                                 filetypes=[("CSV files", "*.csv"), ("JSON files", "*.json")])
-        if not file_path:
-            return
+                                                 filetypes=[("CSV files","*.csv"),("JSON files","*.json")])
+        if not file_path: return
         try:
             results = [self.tree.item(child)["values"] for child in self.tree.get_children()]
             if file_path.endswith(".csv"):
-                with open(file_path, "w", newline="") as f:
+                with open(file_path,"w",newline="") as f:
                     writer = csv.writer(f)
-                    writer.writerow(["PID", "Waiting", "Turnaround", "Response"])
+                    writer.writerow(["PID","Waiting","Turnaround","Response"])
                     writer.writerows(results)
             else:
-                json_data = [{"PID": r[0], "Waiting": r[1], "Turnaround": r[2], "Response": r[3]} for r in results]
-                with open(file_path, "w") as f:
-                    json.dump(json_data, f, indent=4)
-            messagebox.showinfo("Success", f"Results saved to {file_path}")
+                json_data = [{"PID":r[0],"Waiting":r[1],"Turnaround":r[2],"Response":r[3]} for r in results]
+                with open(file_path,"w") as f:
+                    json.dump(json_data,f,indent=4)
+            messagebox.showinfo("Success",f"Results saved to {file_path}")
         except Exception as e:
             messagebox.showerror("Save Error", str(e))
 
     # --- SIMULATION ---
+    def check_algorithm(self, event):
+        if self.algo_var.get()=="MLFQ":
+            self.quantum_label.grid_remove()
+            self.quantum_entry.grid_remove()
+            self.mlfq_frame.grid()
+        else:
+            self.mlfq_frame.grid_remove()
+            self.quantum_label.grid()
+            self.quantum_entry.grid()
+
     def run_scheduler(self):
         if not self.processes:
-            messagebox.showwarning("No Processes", "Please add processes first")
+            messagebox.showwarning("No Processes","Please add processes first")
             return
         algo = self.algo_var.get()
-        quantum = int(self.quantum_entry.get())
-        procs = [Process(p.pid, p.arrival, p.burst, p.priority) for p in self.processes]
+        procs = [Process(p.pid,p.arrival,p.burst,p.priority) for p in self.processes]
 
-        if algo == "FCFS":
-            results, gantt = self.fcfs(procs)
-        elif algo == "SJF":
-            results, gantt = self.sjf(procs)
-        elif algo == "SRT":
-            results, gantt = self.srt(procs)
-        elif algo == "RR":
-            results, gantt = self.rr(procs, quantum)
-        elif algo == "MLFQ":
-            results, gantt = self.mlfq(procs, [2, 4, 8])
+        if algo=="FCFS":
+            results,gantt = self.fcfs(procs)
+        elif algo=="SJF":
+            results,gantt = self.sjf(procs)
+        elif algo=="SRT":
+            results,gantt = self.srt(procs)
+        elif algo=="RR":
+            try:
+                quantum = int(self.quantum_entry.get())
+            except:
+                messagebox.showerror("Input Error","Enter a valid integer for RR quantum")
+                return
+            results,gantt = self.rr(procs,quantum)
+        elif algo=="MLFQ":
+            try:
+                quanta = [int(self.mlfq_q1.get()), int(self.mlfq_q2.get()), int(self.mlfq_q3.get())]
+            except:
+                messagebox.showerror("Input Error","Enter valid integers for MLFQ levels")
+                return
+            results,gantt = self.mlfq(procs, quanta)
         else:
             messagebox.showinfo("Error", f"{algo} not implemented.")
             return
 
+        # Update Gantt chart and table
         self.display_gantt(gantt)
         for row in self.tree.get_children():
             self.tree.delete(row)
@@ -152,156 +193,136 @@ class CPUSchedulerGUI:
             self.tree.insert("", "end", values=r)
 
     # --- GANTT CHART ---
-    def display_gantt(self, gantt):
+    def display_gantt(self,gantt):
         self.gantt_canvas.delete("all")
-        if not gantt:
-            return
+        if not gantt: return
         max_time = max([end for _,_,end in gantt])
         width = 800
-        scale = width / max_time if max_time > 0 else 1
-        x = 0
-        for pid, start, end in gantt:
-            w = (end - start) * scale
+        scale = width/max_time if max_time>0 else 1
+        x=0
+        for pid,start,end in gantt:
+            w = (end-start)*scale
             color = f"#{hex(abs(hash(pid)) % 0xFFFFFF)[2:]:0>6}"
-            self.gantt_canvas.create_rectangle(x, 10, x+w, 40, fill=color)
-            self.gantt_canvas.create_text(x + w/2, 25, text=pid)
-            self.gantt_canvas.create_text(x, 45, text=str(start))
-            x += w
-        self.gantt_canvas.create_text(x, 45, text=str(gantt[-1][2]))
+            self.gantt_canvas.create_rectangle(x,10,x+w,40,fill=color)
+            self.gantt_canvas.create_text(x+w/2,25,text=pid)
+            self.gantt_canvas.create_text(x,45,text=str(start))
+            x+=w
+        self.gantt_canvas.create_text(x,45,text=str(gantt[-1][2]))
 
     # --- ALGORITHMS ---
     def fcfs(self, procs):
-        procs.sort(key=lambda p: p.arrival)
-        time = 0
-        gantt = []
-        results = []
+        procs.sort(key=lambda p:p.arrival)
+        time,gantt,results = 0,[],[]
         for p in procs:
-            if time < p.arrival: time = p.arrival
-            p.start = time
-            p.completion = time + p.burst
-            time += p.burst
-            gantt.append((p.pid, p.start, p.completion))
-            tat = p.completion - p.arrival
-            wt = tat - p.burst
-            rt = p.start - p.arrival
-            results.append((p.pid, wt, tat, rt))
-        return results, gantt
+            if time<p.arrival: time=p.arrival
+            p.start=time
+            p.completion=time+p.burst
+            time+=p.burst
+            gantt.append((p.pid,p.start,p.completion))
+            tat=p.completion-p.arrival
+            wt=tat-p.burst
+            rt=p.start-p.arrival
+            results.append((p.pid,wt,tat,rt))
+        return results,gantt
 
-    def sjf(self, procs):
-        time = 0
-        gantt = []
-        results = []
-        remaining = procs[:]
+    def sjf(self,procs):
+        time,gantt,results=0,[],[]
+        remaining=procs[:]
         while remaining:
-            available = [p for p in remaining if p.arrival <= time]
+            available=[p for p in remaining if p.arrival<=time]
             if not available:
-                time += 1
+                time+=1
                 continue
-            p = min(available, key=lambda x: x.burst)
-            p.start = time
-            p.completion = time + p.burst
-            time += p.burst
-            tat = p.completion - p.arrival
-            wt = tat - p.burst
-            rt = p.start - p.arrival
-            results.append((p.pid, wt, tat, rt))
-            gantt.append((p.pid, p.start, p.completion))
+            p=min(available,key=lambda x:x.burst)
+            p.start=time
+            p.completion=time+p.burst
+            time+=p.burst
+            tat=p.completion-p.arrival
+            wt=tat-p.burst
+            rt=p.start-p.arrival
+            results.append((p.pid,wt,tat,rt))
+            gantt.append((p.pid,p.start,p.completion))
             remaining.remove(p)
-        return results, gantt
+        return results,gantt
 
-    def srt(self, procs):
-        time = 0
-        gantt = []
-        remaining = procs[:]
-        last_pid = None
-        start_time = None
-        results = []
+    def srt(self,procs):
+        time,gantt,remaining,last_pid,start_time,results=0,[],procs[:],None,None,[]
         while remaining:
-            available = [p for p in remaining if p.arrival <= time and p.remaining > 0]
+            available=[p for p in remaining if p.arrival<=time and p.remaining>0]
             if not available:
-                if last_pid is not None:
-                    gantt.append((last_pid, start_time, time))
-                    last_pid = None
-                time += 1
+                if last_pid: gantt.append((last_pid,start_time,time)); last_pid=None
+                time+=1
                 continue
-            current = min(available, key=lambda p: p.remaining)
-            if last_pid != current.pid:
-                if last_pid is not None:
-                    gantt.append((last_pid, start_time, time))
-                start_time = time
-                last_pid = current.pid
-                if current.start is None: current.start = time
-            current.remaining -= 1
-            time += 1
-            if current.remaining == 0:
-                current.completion = time
-                tat = current.completion - current.arrival
-                wt = tat - current.burst
-                rt = current.start - current.arrival
-                results.append((current.pid, wt, tat, rt))
+            current=min(available,key=lambda p:p.remaining)
+            if last_pid!=current.pid:
+                if last_pid: gantt.append((last_pid,start_time,time))
+                start_time=time
+                last_pid=current.pid
+                if current.start is None: current.start=time
+            current.remaining-=1
+            time+=1
+            if current.remaining==0:
+                current.completion=time
+                tat=current.completion-current.arrival
+                wt=tat-current.burst
+                rt=current.start-current.arrival
+                results.append((current.pid,wt,tat,rt))
                 remaining.remove(current)
-                gantt.append((current.pid, start_time, time))
-                last_pid = None
-                start_time = None
-        return results, gantt
+                gantt.append((current.pid,start_time,time))
+                last_pid=None
+                start_time=None
+        return results,gantt
 
-    def rr(self, procs, quantum):
-        time = 0
-        gantt = []
-        queue = deque(sorted(procs, key=lambda p: p.arrival))
-        results = []
+    def rr(self,procs,quantum):
+        time,gantt,queue=0,[],deque(sorted(procs,key=lambda p:p.arrival))
+        results=[]
         while queue:
-            p = queue.popleft()
-            if p.start is None: p.start = max(time, p.arrival)
-            start = max(time, p.arrival)
-            run_time = min(quantum, p.remaining)
-            p.remaining -= run_time
-            end = start + run_time
-            gantt.append((p.pid, start, end))
-            time = end
-            if p.remaining > 0:
-                queue.append(p)
+            p=queue.popleft()
+            if p.start is None: p.start=max(time,p.arrival)
+            start=max(time,p.arrival)
+            run_time=min(quantum,p.remaining)
+            p.remaining-=run_time
+            end=start+run_time
+            gantt.append((p.pid,start,end))
+            time=end
+            if p.remaining>0: queue.append(p)
             else:
-                p.completion = time
-                tat = p.completion - p.arrival
-                wt = tat - p.burst
-                rt = p.start - p.arrival
-                results.append((p.pid, wt, tat, rt))
-        return results, gantt
+                p.completion=time
+                tat=p.completion-p.arrival
+                wt=tat-p.burst
+                rt=p.start-p.arrival
+                results.append((p.pid,wt,tat,rt))
+        return results,gantt
 
-    def mlfq(self, procs, quanta=[2,4,8]):
-        queues = [deque(), deque(), deque()]
-        for p in sorted(procs, key=lambda p: p.arrival):
-            queues[0].append(p)
-        time = 0
-        gantt = []
-        results = []
+    def mlfq(self,procs,quanta=[2,4,8]):
+        queues=[deque(),deque(),deque()]
+        for p in sorted(procs,key=lambda p:p.arrival): queues[0].append(p)
+        time,gantt,results=0,[],[]
         while any(queues):
-            for i, q in enumerate(queues):
+            for i,q in enumerate(queues):
                 if not q: continue
-                p = q.popleft()
-                if p.start is None: p.start = max(time, p.arrival)
-                start = max(time, p.arrival)
-                run_time = min(quanta[i], p.remaining) if i<2 else p.remaining
-                p.remaining -= run_time
-                end = start + run_time
-                gantt.append((p.pid, start, end))
-                time = end
-                if p.remaining > 0:
-                    next_q = queues[i+1] if i < 2 else queues[i]
+                p=q.popleft()
+                if p.start is None: p.start=max(time,p.arrival)
+                start=max(time,p.arrival)
+                run_time=min(quanta[i],p.remaining) if i<2 else p.remaining
+                p.remaining-=run_time
+                end=start+run_time
+                gantt.append((p.pid,start,end))
+                time=end
+                if p.remaining>0:
+                    next_q=queues[i+1] if i<2 else queues[i]
                     next_q.append(p)
                 else:
-                    p.completion = time
-                    tat = p.completion - p.arrival
-                    wt = tat - p.burst
-                    rt = p.start - p.arrival
-                    results.append((p.pid, wt, tat, rt))
+                    p.completion=time
+                    tat=p.completion-p.arrival
+                    wt=tat-p.burst
+                    rt=p.start-p.arrival
+                    results.append((p.pid,wt,tat,rt))
                 break
-            else:
-                time += 1
-        return results, gantt
+            else: time+=1
+        return results,gantt
 
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = CPUSchedulerGUI(root)
+if __name__=="__main__":
+    root=tk.Tk()
+    app=CPUSchedulerGUI(root)
     root.mainloop()
