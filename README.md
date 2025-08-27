@@ -44,7 +44,7 @@ If you are dowloading the file:
 3. Run the application:
 
 ```bash
-python main.py
+python CPU_Schedueling.py
 ```
 =======
 
